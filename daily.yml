@@ -1,0 +1,66 @@
+name: Daily Hotspot
+
+on:
+  schedule:
+    # UTC 01:00 = 北京 09:00；UTC 13:00 = 北京 21:00
+    - cron: '0 1,13 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: daily-hotspot
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run daily fetch
+        env:
+          # 付费 Key（可选，未配置自动跳过）
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          AMAZON_PA_ACCESS_KEY: ${{ secrets.AMAZON_PA_ACCESS_KEY }}
+          AMAZON_PA_SECRET_KEY: ${{ secrets.AMAZON_PA_SECRET_KEY }}
+          ECHOTIK_API_KEY: ${{ secrets.ECHOTIK_API_KEY }}
+          FASTMOSS_API_KEY: ${{ secrets.FASTMOSS_API_KEY }}
+          SHOPEE_API_KEY: ${{ secrets.SHOPEE_API_KEY }}
+          SHOPEE_API_SECRET: ${{ secrets.SHOPEE_API_SECRET }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: python run_daily.py
+
+      - name: Commit data back
+        run: |
+          git config user.name "hotspot-bot"
+          git config user.email "hotspot-bot@users.noreply.github.com"
+          git add site/data/app-data.js site/data/health.json
+          git diff --cached --quiet || git commit -m "data: daily hotspot snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push || echo "nothing to commit"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
