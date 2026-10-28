@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>热点雷达 · 实时抓取版</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230C1F22'/%3E%3Ccircle cx='16' cy='16' r='9.5' fill='none' stroke='%2312A693' stroke-width='1.4'/%3E%3Ccircle cx='16' cy='16' r='5.5' fill='none' stroke='%2312A693' stroke-width='1.2' opacity='.7'/%3E%3Cpath d='M16 16 L23.5 9.5 A9.5 9.5 0 0 1 25 16 Z' fill='%2312A693' opacity='.55'/%3E%3Ccircle cx='16' cy='16' r='1.8' fill='%23F0A202'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Space+Grotesk:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="/static/assets/css/app.css">
+<style>
+  /* 实时版增量样式（在现有 app.css 之上补充） */
+  .rt-statusbar{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    padding:10px 18px; background:#fff; border-bottom:1px solid #E1E8E6;
+    font-size:13px; color:#0C1F22;
+  }
+  .rt-statusbar .pill{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:4px 10px; border-radius:999px; background:#F3F6F5;
+    border:1px solid #E1E8E6;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .dot.ok{background:#1E9E62; box-shadow:0 0 0 3px rgba(30,158,98,.15);}
+  .dot.fail{background:#DC2626; box-shadow:0 0 0 3px rgba(220,38,38,.15);}
+  .dot.unknown{background:#8A989B;}
+  .dot.disabled{background:#B7C2C4;}
+  .rt-fetch-btn{
+    margin-left:auto; background:#0E8C7D; color:#fff; border:none;
+    padding:8px 16px; border-radius:8px; font-weight:600; cursor:pointer;
+    font-family:inherit; font-size:13px;
+  }
+  .rt-fetch-btn:hover{background:#12A693;}
+  .rt-fetch-btn[disabled]{opacity:.6; cursor:wait;}
+  .rt-tabs{display:flex; gap:4px; padding:10px 18px 0; background:#F3F6F5; border-bottom:1px solid #E1E8E6;}
+  .rt-tab{
+    padding:8px 14px; cursor:pointer; border:none; background:transparent;
+    font-family:inherit; font-size:14px; color:#5a6a6d; border-bottom:2px solid transparent;
+  }
+  .rt-tab.active{color:#0C1F22; border-bottom-color:#0E8C7D; font-weight:600;}
+  .rt-filters{
+    display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+    padding:10px 18px; background:#F3F6F5; font-size:13px;
+  }
+  .rt-filters select, .rt-filters label{
+    padding:5px 8px; border:1px solid #E1E8E6; border-radius:6px; background:#fff;
+    font-family:inherit; font-size:13px;
+  }
+  .rt-list{padding:14px 18px; display:grid; gap:10px;}
+  .rt-card{
+    background:#fff; border:1px solid #E1E8E6; border-radius:10px; padding:14px 16px;
+    display:grid; grid-template-columns: 64px 1fr auto; gap:14px; align-items:center;
+    cursor:pointer; transition:box-shadow .15s;
+  }
+  .rt-card:hover{box-shadow:0 4px 14px rgba(12,31,34,.08);}
+  .rt-score{
+    width:56px; height:56px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:20px; color:#fff;
+  }
+  .rt-title{font-size:15px; font-weight:600; color:#0C1F22; margin-bottom:4px; line-height:1.4;}
+  .rt-meta{font-size:12px; color:#5a6a6d; display:flex; flex-wrap:wrap; gap:10px;}
+  .rt-meta .tag{
+    padding:1px 8px; border-radius:999px; background:#E7F5F2; color:#0E8C7D; font-size:11px;
+  }
+  .rt-meta .tag.warn{background:#FCE8E6; color:#DC2626;}
+  .rt-meta .tag.traffic{background:#EEF1F2; color:#8A989B;}
+  .rt-meta .tag.market{background:#FFF4D6; color:#B07A00;}
+  .rt-card a{color:#0E8C7D; text-decoration:none; font-size:12px;}
+  .rt-card a:hover{text-decoration:underline;}
+  .rt-right{text-align:right; font-size:11px; color:#8A989B; line-height:1.6;}
+  .rt-detail-backdrop{
+    position:fixed; inset:0; background:rgba(12,31,34,.45); display:none; z-index:50;
+    align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto;
+  }
+  .rt-detail{
+    background:#fff; border-radius:14px; max-width:880px; width:100%; padding:24px;
+  }
+  .rt-detail h2{margin:0 0 6px; font-size:20px; color:#0C1F22;}
+  .rt-detail .row{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:16px;}
+  .rt-detail .box{background:#F3F6F5; border-radius:10px; padding:14px; font-size:13px; line-height:1.7;}
+  .rt-detail .close{
+    float:right; border:none; background:transparent; font-size:22px; cursor:pointer; color:#8A989B;
+  }
+  .rt-source-row{
+    display:grid; grid-template-columns: 220px 90px 90px 90px 1fr; gap:10px;
+    padding:10px 14px; border-bottom:1px solid #E1E8E6; font-size:13px; align-items:center;
+  }
+  .rt-source-row.head{font-weight:600; color:#5a6a6d; background:#F3F6F5;}
+  .rt-config-form{max-width:560px; padding:20px;}
+  .rt-config-form label{display:block; margin:12px 0 4px; font-size:13px; color:#0C1F22; font-weight:600;}
+  .rt-config-form input, .rt-config-form textarea{
+    width:100%; padding:8px 10px; border:1px solid #E1E8E6; border-radius:6px; font-family:inherit; font-size:13px;
+  }
+  .rt-empty{padding:40px; text-align:center; color:#8A989B;}
+  .rt-note{font-size:12px; color:#8A989B; padding:8px 18px; background:#FFF8E6; border-top:1px solid #F0E0A8;}
+  @media (max-width:720px){
+    .rt-card{grid-template-columns: 48px 1fr;}
+    .rt-right{grid-column:1/-1; text-align:left;}
+    .rt-detail .row{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div class="rt-statusbar">
+  <span class="pill">最近抓取：<strong id="last-run">—</strong></span>
+  <span class="pill">下次预计：<strong id="next-run">—</strong></span>
+  <span class="pill">本轮新增：<strong id="new-count">0</strong></span>
+  <span id="source-dots" style="display:flex;gap:6px;align-items:center;"></span>
+  <button class="rt-fetch-btn" id="fetch-btn">立即抓取</button>
+</div>
+
+<div class="rt-tabs">
+  <button class="rt-tab active" data-tab="live">实时抓取</button>
+  <button class="rt-tab" data-tab="snapshot">历史快照 (2026-10-25)</button>
+  <button class="rt-tab" data-tab="sources">数据源状态</button>
+  <button class="rt-tab" data-tab="config">配置</button>
+</div>
+
+<div class="rt-filters" id="filters">
+  <label>市场
+    <select id="f-market">
+      <option value="">全部</option>
+      <option value="US">美国</option>
+      <option value="CN">国内</option>
+      <option value="ID">印尼</option>
+      <option value="VN">越南</option>
+      <option value="SA">沙特/中东</option>
+    </select>
+  </label>
+  <label>品类
+    <select id="f-category">
+      <option value="">全部</option>
+      <option value="home">家居</option>
+      <option value="outdoor">户外</option>
+      <option value="beauty">美妆</option>
+      <option value="3c">3C配件</option>
+    </select>
+  </label>
+  <label><input type="checkbox" id="f-sellable"> 仅看可带货</label>
+  <span style="margin-left:auto;color:#8A989B;font-size:12px;" id="count-label"></span>
+</div>
+
+<div class="rt-note" id="mode-note">
+  实时版：每 <strong id="interval-note">45</strong> 分钟自动抓取一轮；未配置 LLM key 时，选品方向为模板化建议。
+</div>
+
+<div class="rt-list" id="list"></div>
+
+<div class="rt-detail-backdrop" id="detail-backdrop">
+  <div class="rt-detail" id="detail-box"></div>
+</div>
+
+<script src="/static/assets/vendor/echarts.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const state = { tab:'live', items:[], sources:[], runs:[] };
+
+async function jget(url){ const r = await fetch(url); return r.json(); }
+async function jpost(url, body){
+  const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: body?JSON.stringify(body):undefined});
+  return r.json();
+}
+
+function scoreColor(s){
+  if (s >= 75) return '#E8513A';
+  if (s >= 65) return '#F0A202';
+  if (s >= 50) return '#7FB3A8';
+  return '#8A989B';
+}
+function esc(t){ return (t||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderDots(){
+  const box = $('#source-dots');
+  box.innerHTML = state.sources.map(s => {
+    const cls = s.enabled ? (s.status==='ok'?'ok':(s.status==='disabled'?'disabled':'fail')) : 'disabled';
+    return `<span class="pill" title="${esc(s.label)}: ${s.status}">
+      <span class="dot ${cls}"></span>${esc(s.key)}
+    </span>`;
+  }).join('');
+}
+
+async function refreshHealth(){
+  const h = await jget('/api/health');
+  $('#last-run').textContent = h.last_run ? (h.last_run.started_at + (h.last_run.error? ' (err)':'')) : '—';
+  $('#next-run').textContent = h.next_run_at || '—';
+  $('#new-count').textContent = h.last_run ? h.last_run.new_count : 0;
+  $('#interval-note').textContent = h.settings.interval_minutes;
+}
+
+async function refreshSources(){
+  const d = await jget('/api/sources');
+  state.sources = d.sources; state.runs = d.runs;
+  renderDots();
+  renderSourcesPage();
+}
+
+async function refreshList(){
+  const part = state.tab === 'snapshot' ? 'snapshot' : 'realtime';
+  const m = $('#f-market').value;
+  const c = $('#f-category').value;
+  const s = $('#f-sellable').checked;
+  const q = new URLSearchParams({partition:part, limit:200});
+  if (m) q.set('market', m);
+  if (c) q.set('category', c);
+  if (s) q.set('sellable_only','1');
+  state.items = await jget('/api/hotspots?' + q.toString());
+  renderList();
+}
+
+function renderList(){
+  const box = $('#list');
+  $('#count-label').textContent = `共 ${state.items.length} 条`;
+  if (!state.items.length){
+    box.innerHTML = '<div class="rt-empty">暂无条目。点击右上角「立即抓取」触发一轮。</div>';
+    return;
+  }
+  box.innerHTML = state.items.map(it => {
+    const tags = [];
+    tags.push(`<span class="tag market">${esc(it.market)}</span>`);
+    if (it.category) tags.push(`<span class="tag">${esc(it.category)}</span>`);
+    if (it.sellable) tags.push(`<span class="tag">可带货</span>`);
+    else tags.push(`<span class="tag traffic">纯流量</span>`);
+    if (it.risk_level === '高') tags.push(`<span class="tag warn">高风险</span>`);
+    if (it.is_template) tags.push(`<span class="tag">模板建议</span>`);
+    return `<div class="rt-card" data-id="${esc(it.id)}">
+      <div class="rt-score" style="background:${scoreColor(it.hot_score)}">${it.hot_score.toFixed(0)}</div>
+      <div>
+        <div class="rt-title">${esc(it.title_zh || it.title)}</div>
+        <div class="rt-meta">
+          ${tags.join('')}
+          <span>来源：${esc(it.source_platform)}</span>
+          ${it.source_url ? `<a href="${esc(it.source_url)}" target="_blank" rel="noopener">原文 ↗</a>`:''}
+        </div>
+      </div>
+      <div class="rt-right">
+        <div>${esc(it.fetched_at || '')}</div>
+        <div>${esc(it.source_publisher || '')}</div>
+      </div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('.rt-card').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.tagName === 'A') return;
+      openDetail(el.dataset.id);
+    });
+  });
+}
+
+async function openDetail(id){
+  const it = await jget('/api/hotspots/' + id);
+  const box = $('#detail-box');
+  const sub = it.subscores || {};
+  const tags = (it.risk_tags||[]).join('、') || '无';
+  box.innerHTML = `
+    <button class="close" onclick="document.getElementById('detail-backdrop').style.display='none'">×</button>
+    <h2>${esc(it.title_zh || it.title)}</h2>
+    <div class="rt-meta">
+      <span class="tag market">${esc(it.market)}</span>
+      <span class="tag">${esc(it.category||'-')}</span>
+      <span class="tag">热度 ${it.hot_score.toFixed(1)}</span>
+      <span class="tag">阶段 ${esc(it.engine_stage || it.stage)}</span>
+      <span class="tag ${it.risk_level==='高'?'warn':''}">风险 ${esc(it.risk_level)}</span>
+      ${it.sellable?'<span class="tag">可带货</span>':'<span class="tag traffic">纯流量</span>'}
+    </div>
+    <div class="row">
+      <div class="box">
+        <strong>六维子分</strong>
+        <div id="radar" style="width:100%;height:280px;"></div>
+      </div>
+      <div class="box">
+        <strong>来源</strong>
+        <div>平台：${esc(it.source_platform)}</div>
+        <div>发布：${esc(it.source_publisher||'-')}</div>
+        <div>抓取时间：${esc(it.fetched_at)}</div>
+        <div>链接：<a href="${esc(it.source_url)}" target="_blank" rel="noopener">${esc(it.source_url)}</a></div>
+        <hr style="border:none;border-top:1px solid #E1E8E6;margin:10px 0;">
+        <strong>风险标签</strong>
+        <div>${esc(tags)}（扣分 ${it.risk_penalty}）</div>
+        <div>阻断原因：${esc((it.block_reasons||[]).join('、') || '无')}</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="box" style="grid-column:1/-1">
+        <strong>选品方向（${it.is_template?'模板建议 · 配置 LLM key 后可生成分镜/直播话术':'人工/历史评分'}）</strong>
+        <div style="margin-top:6px;">${esc(it.suggestion_zh||'—')}</div>
+      </div>
+    </div>
+  `;
+  $('#detail-backdrop').style.display = 'flex';
+  const chart = echarts.init(box.querySelector('#radar'));
+  chart.setOption({
+    radar: {
+      indicator: [
+        {name:'搜索', max:100}, {name:'社媒', max:100}, {name:'增长', max:100},
+        {name:'排名', max:100}, {name:'品类匹配', max:100}, {name:'竞争空位', max:100},
+      ],
+      radius: 90,
+    },
+    series: [{
+      type:'radar',
+      data:[{value:[sub.search||0, sub.social||0, sub.growth||0, sub.rank||0, sub.category_fit||0, sub.competition_gap||0],
+             name:'子分', areaStyle:{color:'rgba(14,140,125,.3)'}, lineStyle:{color:'#0E8C7D'}, itemStyle:{color:'#0E8C7D'}}]
+    }]
+  });
+}
+
+function renderSourcesPage(){
+  if (state.tab !== 'sources') return;
+  const rows = [['key','label','market','status','items','last_error']];
+  const html = ['<div style="padding:14px 18px;">',
+    '<div class="rt-source-row head"><span>数据源</span><span>市场</span><span>状态</span><span>条数</span><span>说明</span></div>'];
+  state.sources.forEach(s => {
+    html.push(`<div class="rt-source-row">
+      <span><span class="dot ${s.enabled?(s.status==='ok'?'ok':'fail'):'disabled'}"></span> <strong>${esc(s.label)}</strong><br><small style="color:#8A989B;">${esc(s.key)}</small></span>
+      <span>${esc(s.market)}</span>
+      <span>${esc(s.status)}${s.status_code?(' ('+s.status_code+')'):''}${s.latency_ms?(' '+s.latency_ms+'ms'):''}</span>
+      <span>${s.items_in_last_fetch}</span>
+      <span style="color:#5a6a6d;font-size:12px;">${esc(s.note||s.last_error||'')}</span>
+    </div>`);
+  });
+  html.push('</div>');
+  html.push('<h3 style="padding:0 18px;">最近抓取批次</h3>');
+  html.push('<div style="padding:0 18px 20px;font-size:13px;">');
+  state.runs.forEach(r => {
+    html.push(`<div style="padding:6px 0;border-bottom:1px solid #E1E8E6;">
+      #${r.id} ${r.started_at} · 触发=${r.triggered_by} · 新增=${r.new_count} 保留=${r.kept_count} 丢弃=${r.dropped_count}
+      ${r.error?`<span style="color:#DC2626;"> · ${esc(r.error)}</span>`:''}
+    </div>`);
+  });
+  html.push('</div>');
+  $('#list').innerHTML = html.join('');
+}
+
+async function renderConfigPage(){
+  if (state.tab !== 'config') return;
+  const h = await jget('/api/health');
+  const s = h.settings;
+  $('#list').innerHTML = `
+    <form class="rt-config-form" id="cfg-form">
+      <h3>抓取配置（保存后写回 .env）</h3>
+      <label>抓取间隔（分钟）</label>
+      <input name="interval_minutes" type="number" value="${s.interval_minutes}" min="10" max="240">
+      <label>品类（逗号分隔：home,outdoor,beauty,3c）</label>
+      <input name="categories" value="${s.categories.join(',')}">
+      <label>市场（逗号分隔：US,CN,ID,VN,SA）</label>
+      <input name="markets" value="${s.markets.join(',')}">
+      <hr style="border:none;border-top:1px solid #E1E8E6;margin:18px 0;">
+      <div style="font-size:13px;color:#5a6a6d;">
+        <div>代理：${s.has_proxy?'<span style="color:#1E9E62;">已配置（.env 中 HTTPS_PROXY）</span>':'未配置（海外 Google/YouTube 源不可达）'}</div>
+        <div>LLM：${s.has_llm?`<span style="color:#1E9E62;">已配置（${esc(s.llm_model)}）</span>`:'未配置（实时条目为模板建议）'}</div>
+      </div>
+      <div style="font-size:12px;color:#8A989B;margin-top:10px;">
+        代理与 LLM key 请直接编辑 <code>.env</code> 文件后重启服务：<br>
+        HTTPS_PROXY=http://127.0.0.1:7890<br>
+        LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3<br>
+        LLM_API_KEY=xxx<br>
+        LLM_MODEL=doubao-seed-1-6-flash
+      </div>
+      <button type="submit" class="rt-fetch-btn" style="margin-top:16px;">保存配置</button>
+    </form>
+  `;
+  $('#cfg-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+      interval_minutes: parseInt(fd.get('interval_minutes')),
+      categories: fd.get('categories').split(',').map(x=>x.trim()).filter(Boolean),
+      markets: fd.get('markets').split(',').map(x=>x.trim()).filter(Boolean),
+    };
+    await jpost('/api/config', body);
+    alert('已保存');
+    refreshHealth();
+  });
+}
+
+// tabs
+document.querySelectorAll('.rt-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.rt-tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    state.tab = t.dataset.tab;
+    if (state.tab === 'sources') { $('#filters').style.display='none'; $('#mode-note').style.display='none'; refreshSources(); }
+    else if (state.tab === 'config') { $('#filters').style.display='none'; $('#mode-note').style.display='none'; $('#list').innerHTML=''; renderConfigPage(); }
+    else { $('#filters').style.display='flex'; $('#mode-note').style.display='block'; refreshList(); }
+  });
+});
+$('#fetch-btn').addEventListener('click', async () => {
+  const btn = $('#fetch-btn');
+  btn.disabled = true; btn.textContent = '抓取中…';
+  try {
+    const r = await jpost('/api/fetch');
+    alert(`抓取完成：新增 ${r.new_count} 条 / 保留 ${r.kept_count} / 丢弃 ${r.dropped_count||0}`);
+  } catch(e){ alert('抓取失败：'+e); }
+  btn.disabled = false; btn.textContent = '立即抓取';
+  refreshHealth(); refreshSources();
+  if (state.tab !== 'sources' && state.tab !== 'config') refreshList();
+});
+['f-market','f-category'].forEach(id => $('#'+id).addEventListener('change', refreshList));
+$('#f-sellable').addEventListener('change', refreshList);
+$('#detail-backdrop').addEventListener('click', e => {
+  if (e.target.id === 'detail-backdrop') e.target.style.display='none';
+});
+
+// boot
+(async function(){
+  await refreshHealth();
+  await refreshSources();
+  await refreshList();
+  setInterval(refreshHealth, 30000);
+})();
+</script>
+</body>
+</html>
