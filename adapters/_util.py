@@ -8,7 +8,7 @@ import time
 
 import requests
 
-from ..config import SETTINGS
+from config import SETTINGS
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
       "AppleWebKit/537.36 (KHTML, like Gecko) "
