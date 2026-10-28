@@ -1,0 +1,9 @@
+﻿[Google News RSS         ] ok=False count=0 err=no items parsed
+[百度热搜                    ] ok=True count=30 err=None
+[YouTube RSS             ] ok=True count=0 err=None
+[节日日历                    ] ok=True count=9 err=None
+[Google Trends(pytrends) ] ok=True count=0 err=pytrends 不可用：HTTPSConnectionPool(host='trends.google.com', port=443): Max retries exceeded with url: /trends/explore/?geo=US (Caused by ConnectTimeoutError(<HTTPSConnection(host='trends.google.com', port=443) at 0x19a28596350>, 'Connection to trends.google.com timed out. (connect timeout=2)'))
+[国内源(默认关)                ] ok=True count=0 err=None
+[受限平台(Key骨架)             ] ok=True count=0 err=None
+
+DONE: 30 live + 21 manual = 51 hotspots in 640445ms

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+work/
+_shots/
+run.log
+test_*.py
+.venv/
