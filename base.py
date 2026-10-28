@@ -1,67 +1,65 @@
-# -*- coding: utf-8 -*-
-"""HTTP 工具与标准化条目结构。
+"""适配器基类：统一抓取接口、限流钩子、重试钩子。
 
-合规：仅用官方 RSS / 公开 API，不绕风控、不模拟登录、不破解签名。
-所有请求带 UA、超时、简单退避；只抓摘要/标题并回链原文，不全文转载。
+每个具体适配器负责一个数据源（TikTok / Amazon / 新闻 RSS …）。
+真实接入时在子类 fetch() 里调用官方 API；未接入时返回带 DEMO 标记的样例，
+**绝不伪造真实指标**（播放量/排名等一律标注 estimated / demo）。
 """
-import time, hashlib, datetime, json, urllib.parse
+from __future__ import annotations
 
-import requests
-
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
-TIMEOUT = 10
-
-
-def http_get(url, params=None, headers=None, retries=2):
-    h = {"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9"}
-    if headers:
-        h.update(headers)
-    last = None
-    for i in range(retries + 1):
-        try:
-            r = requests.get(url, params=params, headers=h, timeout=TIMEOUT)
-            if r.status_code == 200:
-                return r
-            last = "HTTP %s" % r.status_code
-        except Exception as e:  # noqa
-            last = str(e)
-        time.sleep(1.5 * (i + 1))
-    raise RuntimeError(last or "request failed")
+import abc
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
 
-def stable_id(platform, url, title):
-    raw = (platform + "|" + url + "|" + title).encode("utf-8")
-    return "rt-" + hashlib.md5(raw).hexdigest()[:10]
+@dataclass
+class FetchResult:
+    """一次抓取的返回。
+
+    cursor:  下一页/下一时间窗游标（不透传具体类型，由适配器自定义）
+    items:   原始热点 dict 列表（结构对齐 RESEARCH_SCHEMA）
+    extra:   附加元信息（榜单快照、抓取耗时等）
+    demo:    True 表示本次返回的是离线样例，未真实联网
+    """
+
+    cursor: Any = None
+    items: list[dict[str, Any]] = field(default_factory=list)
+    extra: dict[str, Any] = field(default_factory=dict)
+    demo: bool = True
 
 
-def now_iso():
-    return datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+class BaseAdapter(abc.ABC):
+    """所有数据源适配器的抽象基类。"""
 
+    name: str = "base"            # 与 config.data_sources 的 key 一致
+    market: str = "GLOBAL"        # 默认覆盖市场，子类可覆写
+    platform_label: str = "未命名平台"
 
-def today_str():
-    return datetime.date.today().isoformat()
+    def __init__(self, api_key: str = "", enabled: bool = True,
+                 rate_limit_per_min: int = 30,
+                 retry_hook: Callable[[Callable, str], Any] | None = None) -> None:
+        self.api_key = api_key
+        self.enabled = enabled
+        self.rate_limit_per_min = rate_limit_per_min
+        self._retry_hook = retry_hook   # 由 reliability.retry 注入
+        self._last_call_ts = 0.0
 
+    # ---- 限流：保证两次外部调用间隔 >= 60/rate_limit_per_min 秒 ----
+    def _throttle(self) -> None:
+        gap = 60.0 / max(1, self.rate_limit_per_min)
+        wait = gap - (time.time() - self._last_call_ts)
+        if wait > 0:
+            time.sleep(wait)
+        self._last_call_ts = time.time()
 
-def normalize(*, platform, url, title, source_publisher, published, market, category,
-              summary="", raw_signals=None, evidence_tier=2):
-    """产出与现有 schema 对齐的最小条目（评分在 scoring.py 里补全）。"""
-    return {
-        "id": stable_id(platform, url, title),
-        "title": title,
-        "title_zh": title,
-        "market": market,
-        "category": category,
-        "source_platform": platform,
-        "source_type": "rss" if "news" in platform or "youtube" in platform else "board",
-        "source_url": url,
-        "source_title": title,
-        "source_publisher": source_publisher,
-        "evidence_tier": evidence_tier,  # 1=官方/榜单, 2=聚合/新闻
-        "fetched_at": now_iso(),
-        "is_real": True,
-        "summary_zh": summary,
-        "published": published,
-        "raw_signals": raw_signals or {},
-        "is_live": True,  # 实时抓取条目，区别于手工快照
-    }
+    def call_with_retry(self, fn: Callable, action: str = "fetch") -> Any:
+        """带重试钩子的调用；未注入钩子时直接执行。"""
+        if self._retry_hook is not None:
+            return self._retry_hook(fn, f"{self.name}:{action}")
+        return fn()
+
+    @abc.abstractmethod
+    def fetch(self, session: Any = None, since: str = "",
+              cursor: Any = None) -> FetchResult:
+        """抓取 since（ISO 日期）之后的新信号，翻页游标 cursor 透传。"""
+        raise NotImplementedError
