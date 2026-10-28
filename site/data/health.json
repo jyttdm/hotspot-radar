@@ -1,0 +1,68 @@
+{
+  "generated_at": "2026-10-28T11:46:10+00:00",
+  "sources": [
+    {
+      "ok": false,
+      "count": 0,
+      "elapsed_ms": 17541,
+      "error": "no items parsed",
+      "last_ok": null,
+      "note": "Google News RSS 四语种",
+      "name": "Google News RSS"
+    },
+    {
+      "ok": false,
+      "count": 0,
+      "elapsed_ms": 0,
+      "error": "fetch() takes 0 positional arguments but 1 was given",
+      "last_ok": null,
+      "note": "百度热搜",
+      "name": "百度热搜"
+    },
+    {
+      "ok": true,
+      "count": 0,
+      "elapsed_ms": 0,
+      "error": null,
+      "last_ok": null,
+      "note": "YouTube RSS：未配置频道 ID（在 config 里订阅）",
+      "name": "YouTube RSS"
+    },
+    {
+      "ok": false,
+      "count": 0,
+      "elapsed_ms": 0,
+      "error": "[Errno 2] No such file or directory: '/home/runner/work/hotspot-radar/hotspot-radar/site/data/calendar.json'",
+      "last_ok": null,
+      "note": "节日日历",
+      "name": "节日日历"
+    },
+    {
+      "ok": true,
+      "count": 0,
+      "elapsed_ms": 443,
+      "error": "pytrends 429/不可用，已优雅降级",
+      "last_ok": null,
+      "note": "Google Trends（pytrends）— 已降级",
+      "name": "Google Trends(pytrends)"
+    },
+    {
+      "ok": true,
+      "count": 0,
+      "elapsed_ms": 0,
+      "error": null,
+      "last_ok": null,
+      "note": "国内源（微博/知乎/抖音聚合）默认关闭，海外 IP 403/401/404；本地运行设 ENABLE_DOMESTIC=1",
+      "name": "国内源(默认关)"
+    },
+    {
+      "ok": true,
+      "count": 0,
+      "elapsed_ms": 0,
+      "error": null,
+      "last_ok": null,
+      "note": "受限平台：未配置任何 Key（7 个平台待接入）",
+      "name": "受限平台(Key骨架)"
+    }
+  ]
+}
