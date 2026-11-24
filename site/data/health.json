@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-11-23T08:37:36+00:00",
+  "generated_at": "2026-11-24T00:36:52+00:00",
   "sources": [
     {
       "ok": false,
       "count": 0,
-      "elapsed_ms": 16970,
+      "elapsed_ms": 18632,
       "error": "no items parsed",
       "last_ok": null,
       "note": "Google News RSS 四语种",
@@ -40,7 +40,7 @@
     {
       "ok": true,
       "count": 0,
-      "elapsed_ms": 415,
+      "elapsed_ms": 426,
       "error": "pytrends 429/不可用，已优雅降级",
       "last_ok": null,
       "note": "Google Trends（pytrends）— 已降级",
